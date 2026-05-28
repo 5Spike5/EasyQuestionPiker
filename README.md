@@ -1,108 +1,170 @@
 # EasyQuestionPicker
 
-`EasyQuestionPicker` 是一个本地图文题目采集与预览工具。
+`EasyQuestionPicker` is a Windows desktop helper for viewing and claiming questions from the Xunfei pool 1 page.
 
-它的工作方式不是直接依赖网页里图片的原始下载地址，而是连接你已经登录的 Chrome/Edge，模拟点击题目列表项，再把页面里已经渲染出来的 `.section-content` 提取出来：
+It combines:
 
-- 纯文字内容直接保存为文本
-- 含图片、公式、混排内容的分区直接截图保存
-- 然后回填到本地 `JSON + 图片缓存`，在程序里做顺序编号和实时预览
+- a Tkinter desktop UI
+- an optional built-in WebView browser for login
+- a Playwright CDP connection for reading live pool data and claiming questions
+- a lightweight in-memory session cache to reduce repeated processing during refreshes
 
-## 适合的使用方式
+The current workflow is focused on:
 
-1. 打开工具，先点“设置”
-2. 填好题目列表项的 CSS 选择器
-3. 点“打开浏览器”，在弹出的专用浏览器里登录
-4. 打开你的接题列表页
-5. 回到工具，点“采集当前页”或“采集当前题”
-6. 左侧按 `1, 2, 3...` 顺序看题，右侧实时预览图文
+- `https://static.xunfeixxj.com/videoMachiningPlatform/#/claim/pools/1`
 
-## 现在支持
+## What It Does
 
-- 打开专用浏览器并保留登录态
-- 模拟点击当前页题目列表项
-- 提取题干、答案、解析分区
-- 自动从 `1` 开始重新编号
-- 本地缓存采集结果到 `captured/latest_questions.json`
-- 左侧列表 + 右侧图文预览
-- 搜索、刷新、重新采集
-- 打包成 Windows `exe`
+- Open a built-in browser window and keep the logged-in session
+- Or connect to an external Chrome / Edge debugging session
+- Fetch the current available questions from pool 1 directly from the live page logic
+- Preview question text and images inside the desktop app
+- Claim the selected question inside the desktop app
+- Highlight newly appeared questions after a refresh
+- Keep a small session-only cache so repeated refreshes feel faster
 
-## 默认预览选择器
+## Current UI Actions
 
-你给我的页面片段已经对应好了这几个默认值：
+Top toolbar buttons:
 
-- 预览根节点：`.preview-body`
-- 分区节点：`.preview-section`
-- 分区标题：`.section-label`
-- 分区内容：`.section-content`
+- `Built-in`: start the built-in WebView browser
+- `Browser`: launch an external Chrome / Edge debugging browser
+- `Refresh`: fetch the latest live questions from pool 1
+- `Claim`: claim the selected question
+- `Inspect`: inspect the current browser tab and page state
+- `Import`: load a saved local JSON file
+- `Settings`: edit browser and runtime options
 
-你通常只需要额外补一个：
+## Recommended Workflow
 
-- 列表项 CSS 选择器：你题目列表里每一题可点击行的选择器
+1. Start the app.
+2. Click `Built-in`.
+3. Log in with your internal account in the built-in browser.
+4. Go to the pool 1 page if it is not already there.
+5. Return to the app and click `Refresh`.
+6. Select a question from the left list.
+7. Preview it on the right side.
+8. Click `Claim` to claim it directly in the app.
 
-如果列表项里标题有单独节点，也可以再补：
+If you prefer an external browser session, use `Browser` instead of `Built-in`.
 
-- 列表标题 CSS 选择器
+## Built-in Browser Notes
 
-## 为什么不是直接下载图片 URL
+The built-in browser uses `pywebview` with Edge Chromium and keeps its own profile directory.
 
-因为很多题目页面不只是单张图：
+Current behavior:
 
-- 可能有文字
-- 可能有图和文字混排
-- 可能有公式、表格、富文本
+- text selection is enabled
+- external links can still open in the system browser
+- the internal preview masking CSS / JS is bypassed in the embedded WebView
 
-所以当前实现优先抓“浏览器已经渲染好的结果”：
+This project is Windows-focused and expects WebView2 / Edge Chromium support on the machine.
 
-- 文本保留文本
-- 富内容直接截取 `.section-content`
+## Cache Behavior
 
-这样本地预览会更接近你在网页上真正看到的样子。
+The app already includes a lightweight session cache.
 
-## 配置文件
+How it works:
 
-程序会在自身目录生成：
+- When live questions are fetched, the app builds a small in-memory cache for the current session.
+- If a question is still present and its signature has not changed, the app reuses the cached processed result.
+- If a question disappears, it drops out of the next cache snapshot automatically.
+- After a successful claim, the app refreshes pool 1 again, so the claimed question is removed and newly available questions can appear.
+- The cache is intentionally small and session-scoped.
+- Closing the app clears the session cache.
+- Local temporary preview data in `captured/` is also cleared on startup / shutdown through the runtime reset flow.
 
-- `capture_config.json`
-- `captured/latest_questions.json`
-- `captured/assets/...`
-- `.browser_profile/`
+This matches the intended behavior of:
 
-其中 `.browser_profile` 是专用浏览器的登录配置目录，登录一次后通常可以复用。
+- old item disappears after it is claimed or removed
+- new item can join on the next refresh
+- no large persistent disk cache is kept
 
-## 安装依赖
+## Project Structure
+
+```text
+EasyWorking/
+|- app.py
+|- build_exe.ps1
+|- requirements.txt
+|- question_viewer/
+|  |- browser_capture.py
+|  |- capture_config.py
+|  |- loader.py
+|  |- models.py
+|  |- paths.py
+|  |- ui.py
+|  `- webview_host.py
+`- vendor/
+```
+
+## Main Files
+
+- [app.py](/E:/PythonProjects/EasyWorking/app.py): entry point
+- [question_viewer/ui.py](/E:/PythonProjects/EasyWorking/question_viewer/ui.py): desktop UI
+- [question_viewer/browser_capture.py](/E:/PythonProjects/EasyWorking/question_viewer/browser_capture.py): browser connection, live fetch, claim logic, cache logic
+- [question_viewer/webview_host.py](/E:/PythonProjects/EasyWorking/question_viewer/webview_host.py): built-in WebView host
+- [question_viewer/capture_config.py](/E:/PythonProjects/EasyWorking/question_viewer/capture_config.py): runtime config model and persistence
+- [build_exe.ps1](/E:/PythonProjects/EasyWorking/build_exe.ps1): Windows packaging script
+
+## Requirements
+
+- Windows
+- Python 3.10+ recommended
+- Chrome or Edge available on the machine
+- Edge WebView2 runtime available for built-in browser mode
+
+## Install
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-## 运行
+## Run
 
 ```powershell
 python app.py
 ```
 
-## 打包成 exe
+## Build EXE
 
 ```powershell
 .\build_exe.ps1
 ```
 
-打包完成后：
+After build:
 
 ```text
 dist\EasyQuestionPicker.exe
 ```
 
-## 运行稳定性
+## Runtime Data
 
-这个项目的打包脚本已经加了：
+The app may create local runtime files such as:
 
-```text
---runtime-tmpdir .runtime
-```
+- `capture_config.json`
+- `captured/latest_questions.json`
+- `captured/assets/...`
+- `.browser_profile/`
+- `.webview_profile/`
+- `.runtime/`
 
-这样 `exe` 会优先在自身目录下的 `.runtime` 中解包，能避开某些机器把临时目录指到 `C:\Windows\Temp` 时的 `tkinter / init.tcl` 报错。
+These are local machine artifacts and are already covered by `.gitignore`.
 
-建议把 `exe` 放在你有写权限的普通目录中使用，不要放进受限目录。
+## Git Notes
+
+The repository includes a `.gitignore` that ignores:
+
+- Python cache files
+- virtual environments
+- IDE settings
+- build output
+- local browser / WebView profiles
+- local runtime capture data
+- temporary packaged artifacts
+
+## Known Scope
+
+This project currently targets pool 1 only.
+
+It is not designed as a generic scraper for every platform page. The current implementation is intentionally tailored to the existing Xunfei pool 1 workflow and the current internal page structure.
