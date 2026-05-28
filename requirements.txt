@@ -1,0 +1,3 @@
+Pillow>=10.4.0,<12.0.0
+pywebview>=6.2.1,<7.0.0
+vendor/playwright-1.60.0-py3-none-win_amd64.whl

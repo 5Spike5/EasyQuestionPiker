@@ -1,0 +1,73 @@
+{
+  "title": "样例题库",
+  "questions": [
+    {
+      "source_id": "1829301829301829301",
+      "title": "一次函数基础题",
+      "tags": ["初中数学", "函数"],
+      "sections": [
+        {
+          "label": "题干",
+          "blocks": [
+            {
+              "type": "text",
+              "value": "已知一次函数 y = 2x + 3，求当 x = 4 时的函数值。"
+            }
+          ]
+        },
+        {
+          "label": "答案",
+          "blocks": [
+            {
+              "type": "text",
+              "value": "11"
+            }
+          ]
+        },
+        {
+          "label": "解析",
+          "blocks": [
+            {
+              "type": "text",
+              "value": "代入 x = 4，得到 y = 2 * 4 + 3 = 11。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source_id": "1829301829301829302",
+      "title": "阅读理解题",
+      "tags": ["语文", "阅读"],
+      "sections": [
+        {
+          "label": "题干",
+          "blocks": [
+            {
+              "type": "text",
+              "value": "阅读下面短文，回答作者表达了怎样的思想感情。"
+            }
+          ]
+        },
+        {
+          "label": "答案",
+          "blocks": [
+            {
+              "type": "text",
+              "value": "表达了对家乡的怀念与赞美。"
+            }
+          ]
+        },
+        {
+          "label": "解析",
+          "blocks": [
+            {
+              "type": "text",
+              "value": "结合关键词“想念”“温暖”“故土”进行概括。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

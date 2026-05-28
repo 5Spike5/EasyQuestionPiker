@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / editor
+.idea/
+.vscode/
+*.code-workspace
+
+# Build outputs
+build/
+dist/
+.runtime/
+runtime_tmp/
+pip_tmp/
+*.spec.bak
+
+# Local app runtime data
+captured/
+capture_config.json
+dist/capture_config.json
+
+# Browser / WebView profiles and local sessions
+.browser_profile/
+.webview_profile/
+.browser_profile_test/
+.browser_profile_test2/
+.browser_profile_test3/
+test_profile/
+test_profile_pw/
+
+# Test / scratch capture outputs
+captured_test/
+captured_test2/
+captured_test3/
+captured_test_roundtrip.json
+tmp_capture_test.html
+tmp_capture_test2.html
+tmp_platform_like.html
+
+# Logs / OS noise
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Optional local artifacts
+*.exe
+*.zip
