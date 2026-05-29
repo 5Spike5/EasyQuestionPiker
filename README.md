@@ -17,6 +17,7 @@ The current workflow is focused on:
 
 - Open a built-in browser window and keep the logged-in session
 - Or connect to an external Chrome / Edge debugging session
+- Switch quickly between 5 account slots with separate saved login profiles
 - Fetch the current available questions from pool 1 directly from the live page logic
 - Preview question text and images inside the desktop app
 - Claim the selected question inside the desktop app
@@ -59,6 +60,23 @@ Current behavior:
 - the internal preview masking CSS / JS is bypassed in the embedded WebView
 
 This project is Windows-focused and expects WebView2 / Edge Chromium support on the machine.
+
+## Multi-Account Slots
+
+The app now supports 5 account slots.
+
+Each slot has:
+
+- its own saved login state
+- its own browser profile directory
+- its own debug port derived from the base debug port
+
+Typical usage:
+
+1. Choose an account slot in the app.
+2. Open `Built-in` or `Browser` for that slot.
+3. Log in once for that slot.
+4. Switch slots later without mixing login states.
 
 ## Cache Behavior
 

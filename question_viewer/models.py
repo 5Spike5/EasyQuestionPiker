@@ -58,4 +58,7 @@ class Question:
 class QuestionSet:
     title: str
     source_path: Path
+    current_user_name: str = ""
+    current_holding: int | None = None
+    holding_limit: int | None = None
     questions: list[Question] = field(default_factory=list)

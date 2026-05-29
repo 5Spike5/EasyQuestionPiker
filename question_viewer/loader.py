@@ -23,8 +23,8 @@ def load_question_set(source_path: str | Path) -> QuestionSet:
         raise QuestionDataError(f"JSON parse failed: {exc}") from exc
 
     raw_questions = payload.get("questions")
-    if not isinstance(raw_questions, list) or not raw_questions:
-        raise QuestionDataError("JSON is missing a non-empty questions array.")
+    if not isinstance(raw_questions, list):
+        raise QuestionDataError("JSON is missing a questions array.")
 
     questions: list[Question] = []
     for index, raw_question in enumerate(raw_questions, start=1):
@@ -33,7 +33,19 @@ def load_question_set(source_path: str | Path) -> QuestionSet:
         questions.append(_parse_question(raw_question, index, path.parent))
 
     title = str(payload.get("title") or path.stem)
-    return QuestionSet(title=title, source_path=path, questions=questions)
+    current_holding_raw = payload.get("current_holding")
+    holding_limit_raw = payload.get("holding_limit")
+    current_holding = int(current_holding_raw) if isinstance(current_holding_raw, int) else None
+    holding_limit = int(holding_limit_raw) if isinstance(holding_limit_raw, int) else None
+
+    return QuestionSet(
+        title=title,
+        source_path=path,
+        current_user_name=str(payload.get("current_user_name") or "").strip(),
+        current_holding=current_holding,
+        holding_limit=holding_limit,
+        questions=questions,
+    )
 
 
 def save_question_set(question_set: QuestionSet, destination: str | Path) -> Path:
@@ -42,6 +54,9 @@ def save_question_set(question_set: QuestionSet, destination: str | Path) -> Pat
 
     payload = {
         "title": question_set.title,
+        "current_user_name": question_set.current_user_name,
+        "current_holding": question_set.current_holding,
+        "holding_limit": question_set.holding_limit,
         "questions": [
             {
                 "source_id": question.source_id,

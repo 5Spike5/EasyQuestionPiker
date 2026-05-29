@@ -61,11 +61,11 @@ def launch_debug_browser(
     config: CaptureConfig,
     app_home: str | Path,
     status_callback: StatusCallback | None = None,
-) -> None:
+) -> subprocess.Popen | None:
     port = int(config.debug_port or 9222)
     if _debug_endpoint_ready(port):
         _emit(status_callback, f"Browser debug endpoint is ready on port {port}.")
-        return
+        return None
 
     browser_path = config.browser_executable_path.strip() or detect_browser_executable(config.browser_name)
     profile_dir = _resolve_profile_dir(config, app_home)
@@ -81,13 +81,13 @@ def launch_debug_browser(
         "--new-window",
         start_url,
     ]
-    subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     _emit(status_callback, "Launching browser...")
 
     for _ in range(40):
         if _debug_endpoint_ready(port):
             _emit(status_callback, "Browser is ready. Please log in once in that browser window.")
-            return
+            return process
         time.sleep(0.5)
 
     raise CaptureError("The browser was started, but the remote debugging port did not become available.")
@@ -121,6 +121,7 @@ def inspect_current_page(
             page_infos = _scan_browser_pages(browser)
             page = _resolve_platform_page(browser, config, status_callback, ensure_pool_page=False)
             selected_info = _summarize_page(page)
+            current_user_name = _extract_current_user_name(page)
             dom_counts = page.evaluate(
                 """
                 () => ({
@@ -138,6 +139,7 @@ def inspect_current_page(
         "selected_title": selected_info["title"],
         "selected_url": selected_info["url"],
         "selected_reason": "Matched the platform tab",
+        "current_user_name": current_user_name,
         "list_item_selector": config.list_item_selector,
         "list_item_count": int(dom_counts.get("listCount") or 0),
         "preview_root_selector": config.preview_root_selector,
@@ -265,6 +267,9 @@ def save_pool_payload(
     question_set = QuestionSet(
         title=str(payload.get("pool_name") or title),
         source_path=json_path,
+        current_user_name=str(payload.get("current_user_name") or "").strip(),
+        current_holding=int(payload["current_holding"]) if isinstance(payload.get("current_holding"), int) else None,
+        holding_limit=int(payload["holding_limit"]) if isinstance(payload.get("holding_limit"), int) else None,
         questions=questions,
     )
     save_question_set(question_set, json_path)
@@ -313,9 +318,7 @@ def _resolve_platform_page(
             break
 
     if page is None:
-        page = context.new_page()
-
-    page.bring_to_front()
+        page = context.pages[0] if context.pages else context.new_page()
     current_url = (page.url or "").strip()
     needs_navigation = not current_url or current_url in {"about:blank", "data:,"}
     if ensure_pool_page and f"/claim/pools/{POOL_ID}" not in current_url:
@@ -357,6 +360,7 @@ def _summarize_page(page) -> dict[str, object]:
 
 def _fetch_pool_payload(page, status_callback: StatusCallback | None) -> dict[str, object]:
     module_url = _resolve_claim_module_url(page)
+    current_user_name = _extract_current_user_name(page)
     result = page.evaluate(
         """
         async ({ moduleUrl, poolId }) => {
@@ -420,10 +424,124 @@ def _fetch_pool_payload(page, status_callback: StatusCallback | None) -> dict[st
     )
     return {
         "pool_name": result.get("poolName") or "Pool 1 live questions",
+        "current_user_name": current_user_name,
         "current_holding": int(result.get("currentHolding") or 0),
         "holding_limit": int(result.get("holdingLimit") or 0),
         "questions": result.get("questions") or [],
     }
+
+
+def _extract_current_user_name(page) -> str:
+    try:
+        return str(
+            page.evaluate(
+                """
+                () => {
+                  const ignoredTexts = new Set(['登录', '退出', '退出登录', '设置', '首页', '个人中心']);
+                  const candidates = [];
+                  const seen = new Set();
+
+                  const pushCandidate = (value, score = 0) => {
+                    if (typeof value !== 'string') return;
+                    const text = value.trim();
+                    if (!text || text.length > 64) return;
+                    if (/^https?:/i.test(text)) return;
+                    if (ignoredTexts.has(text)) return;
+                    const lower = text.toLowerCase();
+                    if (seen.has(lower)) return;
+                    seen.add(lower);
+                    candidates.push({ text, score });
+                  };
+
+                  const inspectObject = (value, depth = 0) => {
+                    if (!value || depth > 4) return;
+                    if (Array.isArray(value)) {
+                      value.slice(0, 12).forEach((item) => inspectObject(item, depth + 1));
+                      return;
+                    }
+                    if (typeof value !== 'object') return;
+
+                    Object.entries(value).slice(0, 40).forEach(([key, child]) => {
+                      const lowerKey = String(key || '').toLowerCase();
+                      if (
+                        typeof child === 'string' &&
+                        /(realname|user_name|user-name|username|nickname|nick_name|displayname|loginname|accountname|mobile|phone|name|user)/i.test(lowerKey)
+                      ) {
+                        let score = 30;
+                        if (/realname|username|nickname|displayname|loginname|accountname/i.test(lowerKey)) {
+                          score = 90;
+                        } else if (/mobile|phone/i.test(lowerKey)) {
+                          score = 60;
+                        } else if (/name/i.test(lowerKey)) {
+                          score = 70;
+                        }
+                        pushCandidate(child, score);
+                      }
+                      if (typeof child === 'object') {
+                        inspectObject(child, depth + 1);
+                      }
+                    });
+                  };
+
+                  const inspectStorage = (storage) => {
+                    for (let index = 0; index < storage.length; index += 1) {
+                      const key = storage.key(index);
+                      if (!key) continue;
+                      const rawValue = storage.getItem(key);
+                      if (!rawValue) continue;
+
+                      const lowerKey = key.toLowerCase();
+                      if (/(realname|username|nickname|displayname|loginname|accountname|mobile|phone|name|user|account|profile)/i.test(lowerKey)) {
+                        pushCandidate(rawValue, 45);
+                      }
+
+                      if ((rawValue.startsWith('{') && rawValue.endsWith('}')) || (rawValue.startsWith('[') && rawValue.endsWith(']'))) {
+                        try {
+                          inspectObject(JSON.parse(rawValue), 0);
+                        } catch (error) {
+                        }
+                      }
+                    }
+                  };
+
+                  [
+                    '.user-name',
+                    '.username',
+                    '.account-name',
+                    '.nick-name',
+                    '.header-user-name',
+                    '[class*="user-name"]',
+                    '[class*="username"]',
+                    '[class*="account-name"]',
+                    '[class*="nick-name"]',
+                    '[class*="userInfo"]',
+                    '[class*="userinfo"]',
+                    '[class*="profile"]',
+                  ].forEach((selector) => {
+                    document.querySelectorAll(selector).forEach((node) => {
+                      pushCandidate(node.textContent || '', 80);
+                    });
+                  });
+
+                  try {
+                    inspectStorage(window.localStorage);
+                  } catch (error) {
+                  }
+
+                  try {
+                    inspectStorage(window.sessionStorage);
+                  } catch (error) {
+                  }
+
+                  candidates.sort((left, right) => right.score - left.score || left.text.length - right.text.length);
+                  return candidates[0]?.text || '';
+                }
+                """
+            )
+            or ""
+        ).strip()
+    except Exception:
+        return ""
 
 
 def _build_questions_from_payload(
